@@ -3,13 +3,13 @@ import telebot
 
 import dbConn
 
-from dbConn import redis_client
+#from dbConn import redis_client
 
 
 
 def mainK(id,admin=False):
-    print('q')
-    idAdd=[k[0] for k in dbConn.executeSql('select idAdds from adds where UID={}'.format(id))]
+
+    idAdd=[k[0] for k in dbConn.executeSql('select id from adds where uid={}'.format(id))]
     idAdd=str(idAdd).replace('[','(').replace(']',')')
     notify=len(dbConn.executeSql('select * from possibleAdds where sendAdd in {} and active="True"'.format(idAdd)))
     notify+=len(dbConn.executeSql('select * from possibleAdds where delyAdd in {} and active="True"'.format(idAdd)))
@@ -134,49 +134,14 @@ def getAlp():
 
     return alpKey
 
-def getCity(type='car',key=None,mask=None):
+def getCity(mask=None):
     cityArr=[]
-    if type.find('Car')!=-1:
-        type='car'
-    if type.find('Air')!=-1:
-        type='air'
     citiesK = telebot.types.ReplyKeyboardMarkup(True, True)
-    if mask is None:
-        if key is None:
-            # print(type)
-            # print(redis_client.get('cities'))
-            cities1 = redis_client.get('cities1')
-            if cities1 is not None:
-                print('redis')
-                cities = json.loads(cities1)
-            else:
-                cities = dbConn.executeSql('select * from cities where type="{}" order by name'.format(type))
-                print('sqlite')
-                # print('cities', cities)
-                redis_client.set('cities1', json.dumps(cities))
-
-
-        else:
-            cities=dbConn.executeSql('select * from cities where name like "{}%" and type="{}" order by name'.format(key,type))
-
-    else:
-        if key is None:
-            cities = dbConn.executeSql('select * from cities where type="{}" and name!="{}" order by name'.format(type,mask))
-
-        else:
-            cities = dbConn.executeSql(
-                'select * from cities where name like "{}%" and type="{}" and name!="{}" order by name'.format(key, type,mask))
-    if type.find('car')!=-1:
-        citiesK.add('На главную', 'Назад')
-    else:
-
-        citiesK.add('На главную')
-
+    citiesK.add('На главную')
+    cities= dbConn.executeSql('select name from cities') if mask is None else dbConn.executeSql('select name from cities where name !="{}"'.format(mask))
     for city in cities:
-        # print('city = ', city)
-        cityArr.append(city[1])
+        cityArr.append(city[0])
         if len(cityArr)==2:
-            # print('cityArr = ', cityArr)
             citiesK.add(*cityArr)
             cityArr.clear()
 

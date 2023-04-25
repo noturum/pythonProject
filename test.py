@@ -1,12 +1,13 @@
 import datetime
 import time
 
+import dbConn
 
-import dbConn as db
-user =db.executeSql('select UID from users')
-a= ['@'+b[0] for b in user]
-a=str(a).replace('[','').replace(']','')
-import re
+# import dbConn as db
+# user =db.executeSql('select UID from users')
+# a= ['@'+b[0] for b in user]
+# a=str(a).replace('[','').replace(']','')
+# import re
 city='''Алматы 				
 Анталья 				
 Астрахань				
@@ -47,20 +48,22 @@ city='''Алматы
 Хабаровск				
 Ханты-Мансийск				
 Челябинск'''
-import datetime
-newUser=0
-activeUser=0
-week=datetime.date.today()+datetime.timedelta(days=-7)
-logs=db.executeSql('select * from log')
-for log in logs:
-
-    date=log[4].split(' ')[0].split('-')
-    date=datetime.date(int(date[0]),int(date[1]),int(date[2]))
-    if date >week and log[6]=='register':
-        newUser+=1
-print(f'новых пользователей за неделю: {newUser}')
-
-
+# import datetime
+# newUser=0
+# activeUser=0
+# week=datetime.date.today()+datetime.timedelta(days=-7)
+# logs=db.executeSql('select * from log')
+# for log in logs:
+#
+#     date=log[4].split(' ')[0].split('-')
+#     date=datetime.date(int(date[0]),int(date[1]),int(date[2]))
+#     if date >week and log[6]=='register':
+#         newUser+=1
+# print(f'новых пользователей за неделю: {newUser}')
+dates=()
+from datetime import date, timedelta
+import sqlite3
+from sqlite3 import Error, OperationalError
 
 
 '''import dbConn as db

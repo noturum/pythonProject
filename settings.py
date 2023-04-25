@@ -9,7 +9,8 @@ import datetime
 from datetime import date
 
 config = configparser.ConfigParser()
-config.read('/root/bot/settings.ini')
+# config.read('/root/bot/settings.ini')
+config.read('settings.ini')
 bot = telebot.TeleBot(config['telegram']['token'])
 def compare(dely,send):
     pass
@@ -69,7 +70,7 @@ class worker():
             for ad in adds:
                 if datetime.date.fromisoformat(ad[4]) < datetime.date.today():
 
-                    dbConn.executeSql('delete from adds where idAdds={}'.format(ad[1]), True)
+                    dbConn.executeSql('delete from adds where id={}'.format(ad[1]), True)
                     dbConn.executeSql('delete from possibleAdds where sendAdd={} or delyAdd={}'.format(ad[1],ad[1]),True)
             users=dbConn.executeSql('select * from users')
             for user in users:
@@ -189,7 +190,7 @@ class worker():
 
 procList = []
 
-procList.append(Thread(name='cleaner', target=worker(60 * 60 ).cleaner, daemon=True))
+procList.append(Thread(name='cleaner', target=worker(60 * 60).cleaner, daemon=True))
 procList[0].start()
 
 
