@@ -63,23 +63,23 @@ class worker():
 
     def cleaner(self):
 
-
-        while True:
-            print('cleaner run')
-            adds = dbConn.executeSql('select * from adds')
-            for ad in adds:
-                if datetime.date.fromisoformat(ad[4]) < datetime.date.today():
-
-                    dbConn.executeSql('delete from adds where id={}'.format(ad[1]), True)
-                    dbConn.executeSql('delete from possibleAdds where sendAdd={} or delyAdd={}'.format(ad[1],ad[1]),True)
-            users=dbConn.executeSql('select * from users')
-            for user in users:
-                if date.fromisoformat(user[7])<date.today():
-                    res = date(date.today().year, date.today().month, date.today().day)
-                    dbConn.executeSql('update users set lastUpdate="{}" where UID={}'.format(res,user[0]),True)
-                    dbConn.executeSql('update users set countAdds={} where UID={}'.format(2,user[0]), True)
-                    dbConn.executeSql('update users set countViews={} where UID={}'.format(5, user[0]), True)
-            time.sleep(self.timeout)
+        pass
+        # while True:
+        #     print('cleaner run')
+        #     adds = dbConn.executeSql('select * from adds')
+        #     for ad in adds:
+        #         if datetime.date.fromisoformat(ad[4]) < datetime.date.today():
+        #
+        #             dbConn.executeSql('delete from adds where id={}'.format(ad[1]), True)
+        #             dbConn.executeSql('delete from possibleAdds where sendAdd={} or delyAdd={}'.format(ad[1],ad[1]),True)
+        #     users=dbConn.executeSql('select * from users')
+        #     for user in users:
+        #         if date.fromisoformat(user[7])<date.today():
+        #             res = date(date.today().year, date.today().month, date.today().day)
+        #             dbConn.executeSql('update users set lastUpdate="{}" where UID={}'.format(res,user[0]),True)
+        #             dbConn.executeSql('update users set countAdds={} where UID={}'.format(2,user[0]), True)
+        #             dbConn.executeSql('update users set countViews={} where UID={}'.format(5, user[0]), True)
+        #     time.sleep(self.timeout)
 
     def search(self, id, type,admin=False):
         msgDely = []  # доставщик

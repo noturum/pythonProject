@@ -60,7 +60,9 @@ city='''Алматы
 #     if date >week and log[6]=='register':
 #         newUser+=1
 # print(f'новых пользователей за неделю: {newUser}')
-dates=()
+i=[]
+if i:
+    print(11)
 from datetime import date, timedelta
 import sqlite3
 from sqlite3 import Error, OperationalError

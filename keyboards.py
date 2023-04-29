@@ -9,23 +9,19 @@ import dbConn
 
 def mainK(id,admin=False):
 
-    idAdd=[k[0] for k in dbConn.executeSql('select id from adds where uid={}'.format(id))]
-    idAdd=str(idAdd).replace('[','(').replace(']',')')
-    notify=len(dbConn.executeSql('select * from possibleAdds where sendAdd in {} and active="True"'.format(idAdd)))
-    notify+=len(dbConn.executeSql('select * from possibleAdds where delyAdd in {} and active="True"'.format(idAdd)))
-    supportA=len(dbConn.executeSql('select * from support where status="await"'))
-    supportU = len(dbConn.executeSql('select * from support where status="answer"'))
+
+    count=dbConn.executeSql(f'select count(id) from possible where dely in (select id from adds where uid={id} and type="dely") or send in (select id from adds where uid={id} and type="send")')[0][0]
+
     main = telebot.types.ReplyKeyboardMarkup(True, True)
     main.add('Хочу отправить', 'Могу доставить')
     main.add('Поиск','Памятка пользователя')
-    # main.add('Очистить историю')
-    #main.add('Отзывы', 'Партнеры')
+
     if admin:
-        main.add('Все заявки', f'Стоимость','Мои заявки' if notify==0 else 'Мои заявки ({})'.format(notify))
+        main.add('Все заявки', f'Стоимость','Мои заявки' if count else 'Мои заявки ({})'.format(count))
         main.add('Ресурс')
 
     else:
-        text='Мои заявки' if notify==0 else 'Мои заявки ({})'.format(notify)
+        text='Мои заявки' if not count else 'Мои заявки ({})'.format(count)
         main.add(text, f'Стоимость')
 
     return main
