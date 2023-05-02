@@ -6,6 +6,8 @@ import time
 import re
 import logging
 
+from telebot.types import LabeledPrice
+
 logging.basicConfig(filename='error.log',
                     format='[%(asctime)s] => %(message)s',
                     level=logging.ERROR)
@@ -16,6 +18,7 @@ import dbConn as db
 import keyboards
 import settings
 from settings import bot
+from keyboards import keys
 
 class Job(threading.Thread):
     def __init__(self,fn,arg=None,timeout=None):
@@ -125,6 +128,7 @@ class User():
         return ex_add or None , alter_add or None
 
     def set_step(self, step):
+        self.last_adds=[]
         self.clear_msg()
         self.step = step
 
@@ -145,7 +149,7 @@ class User():
             try:
                 bot.delete_message(self.id, msg)
             except Exception as e:
-                print(e)
+                pass
         self.msg = []
 
     def validate(self, ntitle=True):
@@ -189,6 +193,7 @@ class User():
 
 
     def get_add(self, id):
+        id=int(id)
         for add in self.last_adds:
             if add.id == id:
                 return add
@@ -211,6 +216,7 @@ class Add():
     EXPAND = 'expand'
     MODER = 'moder'
     TRANSFER='transfer'
+    POSSIBLE='possible'
 
     def __init__(self, id=None, args=None,transfer=[]):
 
@@ -300,7 +306,7 @@ class Add():
             self.city_in, self.city_to, month(self.date_to))
         return text
 
-    def mode(self, mode):
+    def mode(self, mode,uid=None):
         self.modes=mode
         keyboard = types.InlineKeyboardMarkup()
         for m in mode:
@@ -328,7 +334,23 @@ class Add():
                     keyboard.add(types.InlineKeyboardButton('Редактировать', callback_data=f'edit@{self.id}'),
                                  types.InlineKeyboardButton('Удалить', callback_data=f'erase@{self.id}'))
                 case self.SEEN:
-                    keyboard.add(types.InlineKeyboardButton('Отработано', callback_data=f'seen@{possible}@{self.id}'))
+                    pick=len(active_user[uid].last_adds)
+                    if self.type=='send':
+                        id = db.executeSql(f'select id from possible where send={self.id}')
+                        if id:
+                            id=id[pick][0]
+                    else:
+                        id = db.executeSql(f'select id from possible where dely={self.id}')
+                        if id:
+                            id = id[pick][0]
+                    keyboard.add(types.InlineKeyboardButton('Отработано', callback_data=f'seen@{id}'))
+                case self.POSSIBLE:
+                    sql = 'select send from possible where dely={} '.format(
+                        self.id) if self.type == 'dely' else 'select dely from possible where send = {} '.format(self.id)
+                    count = db.executeSql(f'select count(id) from adds where id in ({sql})')[0][0]
+                    if count>0:
+                        keyboard.add(types.InlineKeyboardButton(f'Совпадений {count}', callback_data=f'pos@{self.id}'))
+
 
         return keyboard
 
@@ -336,7 +358,7 @@ class Add():
         if not self.uid:
             self.uid = uid
 
-        mode=self.mode(mode)
+        mode=self.mode(mode,uid)
         send_message(self.expand() if (self.EXPAND in self.modes or self.MODER in self.modes) else self.collapse(), uid,
                      mode, User.RES)
         for tranfer in self.transfer:
@@ -585,6 +607,11 @@ def send_message(text, uid, keyboard=None, state=None, foto=None, reply=False, v
     else:
         bot.send_message(chat_id=uid, text='Упс, у вас блокировка')
 
+def search_city(text):
+
+    var=(f'%{1}%',)
+    query=db.executeSql(f'select name from airport where name = "{text.capitalize()}" or code ="{text.upper()}"')
+    return query if query else None
 
 try:
 
@@ -593,7 +620,7 @@ try:
         pass
 
 
-    @bot.message_handler(commands=['adm'])
+
     @bot.message_handler(commands=['auth'])
     def auth(message):
         log = message.text.replace('/auth ', '').split(' ')[0]
@@ -623,12 +650,6 @@ try:
 
     @bot.message_handler(commands=['start'])
     def welcome(message):
-        help_text = '''Этот бот для экономии времени и комфортной помощи друг другу по собственному желанию и возможностям. Никто никому ничем не обязан – ни Вы, ни Вам. Если Вы сомневаетесь в человеке, перевозимом предмете, условиях или же на стадии общения Вам уже некомфортно – просто откажитесь от взаимодействия и будьте спокойны.
-    1) Не переводите денег вперед больше, чем Вы готовы подарить. 
-    2) Ценные вещи и товары старайтесь не передавать. Если стоит острая необходимость - передавайте и получайте все лично и в аэропорту.
-    3) Запрашивайте, а также сами предоставляйте больше информации о себе и поездке. Проверяйте информацию на подлинность - созванивайтесь, задавайте вопросы, предлагайте общение в др. соцсетях и тд. 
-    4) Сообщайте админу @asap_delivery о подозрительных пользователях, а также об откровенных мошенниках - мы просто их блокируем. Навсегда.
-'''
         bot.clear_step_handler_by_chat_id(chat_id=message.chat.id)
         try:
             bot.delete_message(message.chat.id, message.id)
@@ -660,13 +681,13 @@ try:
             active_user[message.chat.id].state = User.ADD_SEND
             active_user[message.chat.id].add_data('type', User.ADD_SEND)
             bot.register_next_step_handler(
-                send_message('Выберите из списка пункт отправления', message.chat.id, keyboards.getCity(),
+                send_message('Укажите название города отправки или код аэропорта', message.chat.id, keys(),
                              User.CITY_IN, foto='carCity1'), quest)
         elif message.text.find('Могу доставить') != -1:
             active_user[message.chat.id].state = User.ADD_DELY
             active_user[message.chat.id].add_data('type', User.ADD_DELY)
             bot.register_next_step_handler(
-                send_message('Выберите из списка пункт отправления', message.chat.id, keyboards.getCity(),
+                send_message('Укажите название города отправки или код аэропорта', message.chat.id, keys(),
                              User.CITY_IN, foto='carCity1'), quest)
 
         elif message.text.find('Поиск') != -1:
@@ -682,16 +703,10 @@ try:
 
 
         elif message.text.find('Мои заявки') != -1:
-
-
-            addsKeyboard = telebot.types.ReplyKeyboardMarkup(True, True)
-            addsKeyboard.add('На главную')
-
-            bot.register_next_step_handler(send_message('Заявки:', message.chat.id, addsKeyboard, 'adds', foto='MyAdds'),
-                                           searchAdds)
-            mode = [Add.EXPAND, Add.EDIT]
+            bot.register_next_step_handler(send_message('Заявки:', message.chat.id, keys(), 'adds', foto='MyAdds'),                                           res)
+            mode = [Add.EXPAND, Add.EDIT,Add.POSSIBLE]
             for add in active_user[message.chat.id].my_add():
-                add.print(mode, message)
+                add.print(mode, message.chat.id)
 
 
         elif message.text == 'Все заявки' and checkAdm(message.chat.id):
@@ -781,26 +796,29 @@ try:
                     id = active_user[message.chat.id].add['id']
                     active_user[message.chat.id].edit_add(message.text)
                     tmp = db.executeSql(f'select {active_user[message.chat.id].step} from adds where id={id}')
-                    db.executeSql('delete from possibleAdds where sendAdd={} or delyAdd={}'.format(id, id))
-                    typeAdd = db.executeSql('select type from adds where id={}'.format(id))[0][0]
-                    settings.Thread(target=settings.worker(60).search, name='search',
-                                    args=(id, typeAdd, checkAdm(message.chat.id))).start()
-                    keyboard = types.ReplyKeyboardMarkup(True, True)
-                    keyboard.add('Мои заявки', 'На главную')
-                    text = ''
-                    match active_user[message.chat.id].step:
-                        case User.CITY_IN:
-                            text = 'Город отправления изменен'
-                        case User.CITY_TO:
-                            text = 'Город доставки изменен'
-                        case User.DESC:
-                            text = 'Описание изменено'
-                        case User.CONTACT:
-                            text = 'Контактная информация изменена'
-                        case User.REFER:
-                            text = 'Ресурс изменен'
-                    log(message.chat.id, '{} {}->{}'.format(text, tmp, message.text), '', 'edit')
-                    send_message(text, message.chat.id, keyboard, state=User.RES)
+                    db.executeSql('delete from possible where send={} or dely={}'.format(id, id))
+
+                    save = active_user[message.chat.id].save()
+
+                    if save:
+                        add = Add(save[0])
+                        Job(Possible().search, add).start()
+                        keyboard = types.ReplyKeyboardMarkup(True, True)
+                        keyboard.add('Мои заявки', 'На главную')
+                        text = ''
+                        match active_user[message.chat.id].step:
+                            case User.CITY_IN:
+                                text = 'Город отправления изменен'
+                            case User.CITY_TO:
+                                text = 'Город доставки изменен'
+                            case User.DESC:
+                                text = 'Описание изменено'
+                            case User.CONTACT:
+                                text = 'Контактная информация изменена'
+                            case User.REFER:
+                                text = 'Ресурс изменен'
+                        log(message.chat.id, '{} {}->{}'.format(text, tmp, message.text), '', 'edit')
+                        send_message(text, message.chat.id, keyboard, state=User.RES)
                 else:
                     active_user[message.chat.id].moder(message)
 
@@ -809,7 +827,8 @@ try:
             case _:
                 match active_user[message.chat.id].step:
                     case User.CITY_IN:
-                        if message.text in keyboards.cities:
+                        if query:=search_city(message.text):
+                            message.text=query[0][0]
                             log(message.chat.id, 'выбор города отправки ' + message.text, '', 'city1')
                             if state == User.TRANSFER :
                                 active_user[message.chat.id].add_data('city', message.text,True)
@@ -832,15 +851,17 @@ try:
                                 active_user[message.chat.id].add_data('city_in', message.text)
 
                                 bot.register_next_step_handler(
-                                    send_message('Выберите из списка пункт назначения', message.chat.id,
-                                                 keyboards.getCity(mask=message.text), User.CITY_TO, foto='carCity2'),
+                                    send_message('Укажите пункт назначения или код аэропорта', message.chat.id,
+                                                 keys(), User.CITY_TO, foto='carCity2'),
                                     quest)
                         else:
-                            pass
+                            msg=send_message('Не могу найти такого города попробуйте еще',message.chat.id,keys())
+                            bot.register_next_step_handler(msg,quest)
+                            bot.delete_message(message.chat.id,msg.id,2)
                     case User.CITY_TO:
 
-                        if message.text in keyboards.cities:
-
+                        if query:=search_city(message.text):
+                            message.text=query[0][0]
                             log(message.chat.id, 'выбор города доставки ' + message.text, '', 'city2')
 
                             active_user[message.chat.id].add_data('city_to', message.text)
@@ -851,7 +872,9 @@ try:
                                 send_message(f"Выберите дату доставки", message.chat.id, state=User.DATE_TO)
                                 calendar(1, message)
                         else:
-                            pass
+                            msg = send_message('Не могу найти такого города попробуйте еще', message.chat.id, keys())
+                            bot.register_next_step_handler(msg, quest)
+                            bot.delete_message(message.chat.id, msg.id, 2)
                     case User.TRANSFER:
 
                         if message.text =='Да':
@@ -903,25 +926,30 @@ try:
                             active_user[message.chat.id].add_data('refer', 'None')
                         else:
                             active_user[message.chat.id].add_data('refer', message.text)
-                            save=active_user[message.chat.id].save()
+                        save=active_user[message.chat.id].save()
 
 
-                            if save:
-                                add = Add(save[0])
-                                keyboard = types.ReplyKeyboardMarkup(True, True)
-                                keyboard.add('Мои заявки', 'На главную')
-                                bot.register_next_step_handler(
-                                    send_message(
-                                        f'Заявка создана. Встречные предложения, а также возможность редактирования заявки доступны в меню "Мои заявки"',
-                                        message.chat.id, keyboard,
-                                        state=User.RES, foto='carCreateDeal'), res)
-                                Job(Possible().search, add).start()
+                        if save:
+                            add = Add(save[0])
+                            keyboard = types.ReplyKeyboardMarkup(True, True)
+                            keyboard.add('Мои заявки', 'На главную')
+                            bot.register_next_step_handler(
+                                send_message(
+                                    f'Заявка создана. Встречные предложения, а также возможность редактирования заявки доступны в меню "Мои заявки"',
+                                    message.chat.id, keyboard,
+                                    state=User.RES, foto='carCreateDeal'), res)
+                            Job(Possible().search, add).start()
 
 
 
     def res(message):
         if message.text in ('На главную', '/start'):
             welcome(message)
+        if message.text =='Мои заявки':
+            bot.register_next_step_handler(send_message('Заявки:', message.chat.id, keys(), 'adds', foto='MyAdds'), res)
+            mode = [Add.EXPAND, Add.EDIT, Add.POSSIBLE]
+            for add in active_user[message.chat.id].my_add():
+                add.print(mode, message.chat.id)
 
 
 
@@ -1379,8 +1407,12 @@ try:
         bot.delete_message(c.message.chat.id, c.message.id, 1)
         id = int(c.data.split('@')[1])
         log(c.message.chat.id, 'удалил заявку', str(id), 'search')
-        db.executeSql('delete from adds where id="{}"'.format(id, True))
-        db.executeSql('delete from possibleAdds where delyAdd={} or sendAdd={}'.format(id, id))
+        db.executeSql(f'delete from adds where id={id}', True)
+        pos=db.executeSql(f'delete from possible where dely={id} or send={id} returning id',True)
+        pos=pos[0][0] if pos else None
+        if pos:
+            db.executeSql(f'delete from done where id={pos}', True)
+
 
 
     @bot.callback_query_handler(func=lambda call: call.data.find('edit') == 0)
@@ -1406,17 +1438,12 @@ try:
 
     @bot.callback_query_handler(func=lambda call: call.data.find('seen') == 0)
     def seen(c):
-        data = c.data.split('@')
-
-        idAdd = data[1]
-
-        idPos = data[2]
-        log(c.message.chat.id, 'нажал', 'отработана заявка ' + idAdd + " и" + idPos, 'btn')
+        id = c.data.split('@')[1]
+        log(c.message.chat.id, 'нажал', 'отработана заявка ' + str(id) , 'btn')
         bot.delete_message(c.message.chat.id, c.message.id)
+        db.executeSql(f'insert into done(id,uid) values({int(id)},{c.message.chat.id})')
 
-        db.executeSql(
-            'update possibleAdds set active="False" where delyAdd={} and sendAdd={} or sendAdd={} and delyAdd={}'.format(
-                idAdd, idPos, idAdd, idPos), True)
+
 
 
     @bot.callback_query_handler(func=lambda call: call.data.find('code') != -1)
@@ -1443,26 +1470,21 @@ try:
 
     @bot.callback_query_handler(func=lambda call: call.data.find('pos') != -1)
     def possibleAdds(c):
-        print(c.data)
-        back(c.message, 'adds')
-        idAdd = c.data.split('@')[1]
-        log(c.message.chat.id, 'нажал', 'совпадение заявок ' + idAdd, 'btn')
-        addsKeyboard = telebot.types.ReplyKeyboardMarkup(True, True)
-        addsKeyboard.add('На главную', 'Назад')
-        typeAdd = db.executeSql('select type from adds where idAdds={} '.format(idAdd))[0][0]
-        sql = 'select sendAdd from possibleAdds where delyAdd={} and active="True"'.format(idAdd) if typeAdd.find(
-            'Dely') != -1 else 'select delyAdd from possibleAdds where sendAdd = {} and active="True"'.format(idAdd)
-        ids = [k[0] for k in
-               db.executeSql(sql)]
 
-        ids = str(ids).replace('[', '(').replace(']', ')')
-        bot.register_next_step_handler(send_message(c.message.text, c.message.chat.id, addsKeyboard, 'adds'), searchAdds)
-
-        adds = db.executeSql('select * from adds where idAdds in {}'.format(ids))
+        id = c.data.split('@')[1]
+        bot.clear_step_handler_by_chat_id(c.message.chat.id)
+        add=active_user[c.message.chat.id].get_add(id)
+        log(c.message.chat.id, 'нажал', 'совпадение заявок ' + id, 'btn')
+        keyboard = telebot.types.ReplyKeyboardMarkup(True, True)
+        keyboard.add('На главную')
+        sql = 'select send from possible where dely={} '.format(id) if add.type== 'dely'  else 'select dely from possible where send = {} '.format(id)
+        bot.register_next_step_handler(send_message(c.message.text, c.message.chat.id, keyboard, 'possible'), res)
+        mode=[Add.COLLAPSE]
         if checkAdm(c.message.chat.id):
-            printAdds(c.message, adds, 'collapse', False, True, False, idAdd)
-        else:
-            printAdds(c.message, adds, 'collapse', False, True, False)
+            mode = [Add.EXPAND,Add.SEEN]
+        adds = db.executeSql(f'select id from adds where id in ({sql})')
+        for id in adds:
+            Add(id[0]).print(mode,c.message.chat.id)
 
 
     @bot.callback_query_handler(func=lambda call: call.data.find('expand') != -1)
@@ -1532,6 +1554,8 @@ try:
                 else:
                     lastmsg = send_message('{}\n{}'.format(msg[1], msg[3]), c.message.chat.id, state='support').id
         bot.register_next_step_handler(main, sendMsg, f'answerSupport@{id}')
+
+
 
 
     bot.polling(none_stop=True)

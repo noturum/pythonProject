@@ -11,6 +11,7 @@ from datetime import date
 config = configparser.ConfigParser()
 # config.read('/root/bot/settings.ini')
 config.read('settings.ini')
+payment= "1832575495:TEST:bf5b0914f94ad98ae2ebaf884f7780d59254c780b141d92355f32af316a7b123"
 bot = telebot.TeleBot(config['telegram']['token'])
 def compare(dely,send):
     pass

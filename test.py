@@ -1,4 +1,5 @@
 import datetime
+import json
 import time
 
 import dbConn
@@ -60,9 +61,11 @@ city='''Алматы
 #     if date >week and log[6]=='register':
 #         newUser+=1
 # print(f'новых пользователей за неделю: {newUser}')
-i=[]
-if i:
-    print(11)
+a=json.loads(open('cities.json','r+',encoding='utf-8').read())
+import requests
+a='Привет как дила'
+b=requests.post('https://speller.yandex.net/services/spellservice.json/checkText',data={'text':a.replace(' ','+')}).json()
+print(b)
 from datetime import date, timedelta
 import sqlite3
 from sqlite3 import Error, OperationalError
