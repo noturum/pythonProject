@@ -354,15 +354,15 @@ class Add():
 
         return keyboard
 
-    def print(self, mode, uid):
+    def print(self, mode, uid,state=None):
         if not self.uid:
             self.uid = uid
 
         mode=self.mode(mode,uid)
         send_message(self.expand() if (self.EXPAND in self.modes or self.MODER in self.modes) else self.collapse(), uid,
-                     mode, User.RES)
+                     mode, User.RES if not state else state)
         for tranfer in self.transfer:
-            send_message(f'Пересадка {month(tranfer["date"])} в городе {tranfer["city"]}',uid,self.mode([self.TRANSFER]),User.RES)
+            send_message(f'Пересадка {month(tranfer["date"])} в городе {tranfer["city"]}',uid,self.mode([self.TRANSFER]),User.RES if not state else state)
         active_user[uid].last_adds.append(self)
 
 class Possible():
@@ -787,45 +787,58 @@ try:
     def quest(message):
         bot.delete_message(message.chat.id, message.id)
         state = active_user[message.chat.id].state
+        step =active_user[message.chat.id].step
         if message.text in ('На главную', '/start'):
             welcome(message)
 
         match state:
             case User.EDIT | User.MODER:
                 if active_user[message.chat.id].add['id']:
+                    match step:
+                        case User.CITY_IN | User.CITY_TO:
+                            if query:=search_city(message.text):
+                                active_user[message.chat.id].edit_add(query[0][0])
+                            else:
+                                msg = send_message('Не могу найти такого города попробуйте еще', message.chat.id,
+                                                   keys())
+                                bot.register_next_step_handler(msg, quest)
+                                bot.delete_message(message.chat.id, msg.id, 3)
+                                return
+                        case _:
+                            active_user[message.chat.id].edit_add(message.text)
+
                     id = active_user[message.chat.id].add['id']
-                    active_user[message.chat.id].edit_add(message.text)
+
+
                     tmp = db.executeSql(f'select {active_user[message.chat.id].step} from adds where id={id}')
                     db.executeSql('delete from possible where send={} or dely={}'.format(id, id))
 
-                    save = active_user[message.chat.id].save()
 
-                    if save:
-                        add = Add(save[0])
-                        Job(Possible().search, add).start()
-                        keyboard = types.ReplyKeyboardMarkup(True, True)
-                        keyboard.add('Мои заявки', 'На главную')
-                        text = ''
-                        match active_user[message.chat.id].step:
-                            case User.CITY_IN:
-                                text = 'Город отправления изменен'
-                            case User.CITY_TO:
-                                text = 'Город доставки изменен'
-                            case User.DESC:
-                                text = 'Описание изменено'
-                            case User.CONTACT:
-                                text = 'Контактная информация изменена'
-                            case User.REFER:
-                                text = 'Ресурс изменен'
-                        log(message.chat.id, '{} {}->{}'.format(text, tmp, message.text), '', 'edit')
-                        send_message(text, message.chat.id, keyboard, state=User.RES)
+                    add = Add(id)
+                    Job(Possible().search, add).start()
+                    keyboard = types.ReplyKeyboardMarkup(True, True)
+                    keyboard.add('Мои заявки', 'На главную')
+                    text = ''
+                    match step:
+                        case User.CITY_IN:
+                            text = 'Город отправления изменен'
+                        case User.CITY_TO:
+                            text = 'Город доставки изменен'
+                        case User.DESC:
+                            text = 'Описание изменено'
+                        case User.CONTACT:
+                            text = 'Контактная информация изменена'
+                        case User.REFER:
+                            text = 'Ресурс изменен'
+                    log(message.chat.id, '{} {}->{}'.format(text, tmp, message.text), '', 'edit')
+                    send_message(text, message.chat.id, keyboard, state=User.RES)
                 else:
                     active_user[message.chat.id].moder(message)
 
 
 
             case _:
-                match active_user[message.chat.id].step:
+                match step:
                     case User.CITY_IN:
                         if query:=search_city(message.text):
                             message.text=query[0][0]
@@ -857,7 +870,7 @@ try:
                         else:
                             msg=send_message('Не могу найти такого города попробуйте еще',message.chat.id,keys())
                             bot.register_next_step_handler(msg,quest)
-                            bot.delete_message(message.chat.id,msg.id,2)
+                            bot.delete_message(message.chat.id,msg.id,3)
                     case User.CITY_TO:
 
                         if query:=search_city(message.text):
@@ -874,7 +887,7 @@ try:
                         else:
                             msg = send_message('Не могу найти такого города попробуйте еще', message.chat.id, keys())
                             bot.register_next_step_handler(msg, quest)
-                            bot.delete_message(message.chat.id, msg.id, 2)
+                            bot.delete_message(message.chat.id, msg.id, 3)
                     case User.TRANSFER:
 
                         if message.text =='Да':
@@ -1205,7 +1218,7 @@ try:
         if message.text == 'Город оправки':
 
             bot.register_next_step_handler(
-                send_message('Укажите город отправки', message.chat.id, keyboards.getCity(), User.CITY_IN), quest)
+                send_message('Укажите название города отправки или код аэропорта', message.chat.id, keys(), User.CITY_IN), quest)
 
         elif message.text == 'Ресурс':
             bot.register_next_step_handler(
@@ -1214,7 +1227,7 @@ try:
         elif message.text == 'Город прибытия':
 
             bot.register_next_step_handler(
-                send_message('Укажите город прибытия', message.chat.id, keyboards.getCity(), User.CITY_TO), quest)
+                send_message('Укажите название города отправки или код аэропорта', message.chat.id, keys(), User.CITY_TO), quest)
         elif message.text == 'Дату':
 
             send_message(
@@ -1426,13 +1439,15 @@ try:
             active_user[c.message.chat.id].state = User.EDIT
             active_user[c.message.chat.id].add_data('id', id)
 
+            add=Add(id).print([Add.EXPAND],c.message.chat.id,User.EDIT)
+
         else:
             active_user[c.message.chat.id].state = User.MODER
 
         log(c.message.chat.id, 'нажал', 'изменить заявку ', 'btn')
 
         bot.register_next_step_handler(
-            send_message('Что меняем?', c.message.chat.id, keyboards.editK(True, checkAdm(c.message.chat.id)), User.EDIT),
+            send_message('Что меняем?', c.message.chat.id, keyboards.editK(True, checkAdm(c.message.chat.id))),
             editAdds)
 
 

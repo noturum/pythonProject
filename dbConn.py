@@ -1,6 +1,6 @@
 import sqlite3
 from sqlite3 import Error, OperationalError
-import redis
+
 
 
 #redis_url = 'redis://127.0.0.1:6379/'
