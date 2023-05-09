@@ -10,7 +10,8 @@ import dbConn
 def mainK(id,admin=False):
     count=dbConn.executeSql(f"select count(id) from possible where dely in (select id from adds where uid={id} and type='dely') or send in (select id from adds where uid={id} and type='send')")[0][0]
     main = telebot.types.ReplyKeyboardMarkup(True, True)
-    main.add('Хочу отправить', 'Могу доставить')
+    #main.add('Хочу отправить', 'Могу доставить')
+    main.add('Могу доставить')
     main.add('Поиск','Памятка пользователя')
     text='Мои заявки' if not count else 'Мои заявки ({})'.format(count)
     main.add(text, f'Стоимость')
@@ -46,6 +47,7 @@ def keys(modes=['main']):
         match mode:
             case 'main':
                 keyboard.add('На главную')
+    return keyboard
 
 
 
@@ -64,5 +66,5 @@ def getCity(mask=None):
 
     return citiesK
 
-
+cities=[c[0] for c in dbConn.executeSql("select name from cities")]
 

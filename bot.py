@@ -15,6 +15,7 @@ import telebot
 from telebot import types
 import csv
 import dbConn as db
+
 import keyboards
 import settings
 from settings import bot
@@ -97,22 +98,27 @@ class User():
             case User.SEARCH_DELY_CITY_IN:
                 ex_sql = f'''SELECT a.id from adds a left join transfer t on a.id=t."add" 
                                 where type="dely" 
-                                and ((city_in="{self.add["city_in"]}" and date_to="{self.add["date_to"]}") 
-                                or (t.city ="{self.add["city_in"]}" and t.date ="{self.add["date_to"]}"))'''
+                                and ((city_in="{self.add["city_in"]}" and date_to between "{self.add["date_in"]}" and "{self.add["date_to"]}" ) 
+                                or (t.city ="{self.add["city_in"]}" and t.date between "{self.add["date_in"]}" and "{self.add["date_to"]}"))'''
                 alter_sql = f'''SELECT a.id from adds a left join transfer t on a.id=t."add" 
                                 where type="dely" 
-                                and ((city_in="{self.add["city_in"]}" and date_to between date("{self.add["date_to"]}","-3") and date("{self.add["date_to"]}","+3")) 
-                                or (t.city ="{self.add["city_in"]}" and t.date between date("{self.add["date_to"]}","-3") and date("{self.add["date_to"]}","+3")))'''
+                                and ((city_in="{self.add["city_in"]}" and date_to between date("{self.add["date_in"]}","-3 days") and date("{self.add["date_to"]}","+3 days")) 
+                                or (t.city ="{self.add["city_in"]}" and t.date between date("{self.add["date_in"]}","-3 days") and date("{self.add["date_to"]}","+3 days")))'''
 
             case User.SEARCH_DELY_ALL:
                 ex_sql = f'''SELECT a.id from adds a left join transfer t on a.id=t."add" 
                                                 where type="dely" 
-                                                and (((city_in="{self.add["city_in"]}" and city_to = "{self.add["city_to"]}) and date_to="{self.add["date_to"]}") 
-                                                or ((t.city ="{self.add["city_in"]}" and city_to = "{self.add["city_to"]}) and t.date ="{self.add["date_to"]}"))'''
+                                                and (((city_in="{self.add["city_in"]}" and city_to = "{self.add["city_to"]}") and date_to between "{self.add["date_in"]}" and "{self.add["date_to"]}") 
+                                                or ((t.city ="{self.add["city_in"]}" and city_to = "{self.add["city_to"]}") and t.date between "{self.add["date_in"]}" and "{self.add["date_to"]}"))'''
                 alter_sql = f'''SELECT a.id from adds a left join transfer t on a.id=t."add" 
                                                 where type="dely" 
-                                                and (((city_in="{self.add["city_in"]}" and city_to = "{self.add["city_to"]}) and date_to between date("{self.add["date_to"]}","-3") and date("{self.add["date_to"]}","+3")) 
-                                                or ((t.city ="{self.add["city_in"]}" and city_to = "{self.add["city_to"]}) and t.date between date("{self.add["date_to"]}","-3") and date("{self.add["date_to"]}","+3")))'''
+                                                and (
+                                                ((city_in="{self.add["city_in"]}" and city_to = "{self.add["city_to"]}") and date_to between date("{self.add["date_in"]}","-3 days") and date("{self.add["date_to"]}","+3 days")) 
+                                                or ((t.city ="{self.add["city_in"]}" and city_to = "{self.add["city_to"]}") and t.date between date("{self.add["date_in"]}","-3 days") and date("{self.add["date_to"]}","+3 days"))
+                                                or ((t.city  ="{self.add["city_in"]}" and city_to in(select name from cities where "locate"=(select "locate" from cities where name="{self.add["city_to"]}")))and date_to between date("{self.add["date_in"]}","-3 days") and date("{self.add["date_to"]}","+3 days"))
+                                                or ((city_in ="{self.add["city_in"]}" and city_to in(select name from cities where "locate"=(select "locate" from cities where name="{self.add["city_to"]}")))and date_to between date("{self.add["date_in"]}","-3 days") and date("{self.add["date_to"]}","+3 days"))
+                                                )
+                                                '''
         ex_add=[]
         alter_add=[]
         if ex_sql:
@@ -162,16 +168,7 @@ class User():
     def save(self):
         if self.validate():
 
-            save= db.executeSql(
-                f'insert into adds(uid,city_in,city_to,date_in,date_to,desc,contact,type,refer) values({self.id},'
-                f'"{self.add["city_in"]}",'
-                f'"{self.add["city_to"]}",'
-                f'"{self.add["date_in"]}",'
-                f'"{self.add["date_to"]}",'
-                f'"{self.add["desc"]}",'
-                f'"{self.add["contact"]}",'
-                f'"{self.add["type"]}",'
-                f'"{self.add["refer"]}") returning id,type',True)[0]
+            save= db.executeSql(f"insert into adds(uid,city_in,city_to,date_in,date_to,desc,contact,type,refer) values({self.id},'{self.add['city_in']}','{self.add['city_to']}','{self.add['date_in']}','{self.add['date_to']}','{self.add['desc']}','{self.add['contact']}','{self.add['type']}','{self.add['refer']}') returning 'id','type'",True)[0]
             for transfer in self.transfer:
                 db.executeSql(f'insert into transfer("add",city,date) values ({save[0]},"{transfer["city"]}","{transfer["date"]}")')
         return save if save else None
@@ -206,7 +203,7 @@ class User():
     def moder(self, msg):
         self.clear_msg()
         self.add[self.step] = msg.text
-        Add(args=self.add).print([Add.MODER], msg)
+        Add(args=self.add).print([Add.MODER], msg.chat.id)
 
 
 class Add():
@@ -590,11 +587,13 @@ def send_message(text, uid, keyboard=None, state=None, foto=None, reply=False, v
                                        allow_sending_without_reply=False)
         else:
             if video is not None:
-                # bot.send_video(msg.chat.id,open(f'/root/bot/img/{video}.mp4','rb'))
-                active_user[uid].msg.append(bot.send_video(uid, open(f'img/{video}.mp4', 'rb')).id)
+
+                active_user[uid].msg.append(bot.send_video(uid, open(f'/root/bot/img/{video}.mp4', 'rb')).id)
+                #active_user[uid].msg.append(bot.send_video(uid, open(f'img/{video}.mp4', 'rb')).id)
             if foto is not None:
-                # fotoMsg=bot.send_photo(msg.chat.id,open('/root/bot/img/'+foto+'.png','rb')
-                active_user[uid].msg.append(bot.send_photo(uid, open('img/' + foto + '.png', 'rb')).id)
+
+                active_user[uid].msg.append(bot.send_photo(uid, open('/root/bot/img/'+foto+'.png', 'rb')).id)
+                #active_user[uid].msg.append(bot.send_photo(uid, open('img/' + foto + '.png', 'rb')).id)
             if keyboard != None:
 
                 lastMsg = bot.send_message(chat_id=uid, text=text, reply_markup=keyboard)
@@ -681,29 +680,33 @@ try:
             active_user[message.chat.id].state = User.ADD_SEND
             active_user[message.chat.id].add_data('type', User.ADD_SEND)
             bot.register_next_step_handler(
-                send_message('Укажите название города отправки или код аэропорта', message.chat.id, keys(),
-                             User.CITY_IN, foto='carCity1'), quest)
+                send_message('Выберите из списка пункт отправления', message.chat.id, keyboards.getCity(), User.CITY_IN, foto='carCity1'), quest)
         elif message.text.find('Могу доставить') != -1:
             active_user[message.chat.id].state = User.ADD_DELY
             active_user[message.chat.id].add_data('type', User.ADD_DELY)
             bot.register_next_step_handler(
-                send_message('Укажите название города отправки или код аэропорта', message.chat.id, keys(),
-                             User.CITY_IN, foto='carCity1'), quest)
+                send_message('Выберите из списка пункт отправления', message.chat.id, keyboards.getCity(), User.CITY_IN, foto='carCity1'), quest)
 
         elif message.text.find('Поиск') != -1:
-            keyboard = types.ReplyKeyboardMarkup(True, True)
-            keyboard.add('Искать тех, кто хочет отправить', 'Искать тех, кто хочет доставить')
-            keyboard.add('На главную')
-            adds = db.executeSql(
-                'SELECT COUNT(id)  from adds')[0][0]
+            # keyboard = types.ReplyKeyboardMarkup(True, True)
+            # keyboard.add('Искать тех, кто хочет отправить', 'Искать тех, кто хочет доставить')
+            # keyboard.add('На главную')
+            adds = db.executeSql('SELECT COUNT(id)  from adds')[0][0]
+            # bot.register_next_step_handler(
+            #     send_message(
+            #         f'Актуальных предложений по всем направлениям:{adds + 111}\nПопулярные направления:\n🇮🇩Индонезия, 🇦🇪ОАЭ, 🇷🇺Россия и СНГ, 🇺🇲США, 🇹🇭Таиланд, 🇹🇷Турция',
+            #         message.chat.id, keyboard), show_sub_menu_search)
+
+            active_user[message.chat.id].state = User.ADD_DELY
+            active_user[message.chat.id].state = User.SEARCH_SEND_ALL if active_user[
+                                                                             message.chat.id].state == User.ADD_SEND else User.SEARCH_DELY_ALL
             bot.register_next_step_handler(
-                send_message(
-                    f'Актуальных предложений по всем направлениям:{adds + 111}\nПопулярные направления:\n🇮🇩Индонезия, 🇦🇪ОАЭ, 🇷🇺Россия и СНГ, 🇺🇲США, 🇹🇭Таиланд, 🇹🇷Турция',
-                    message.chat.id, keyboard), show_sub_menu_search)
+                send_message(f'Актуальных предложений по всем направлениям:{adds + 111}\nПопулярные направления:\n🇮🇩Индонезия, 🇦🇪ОАЭ, 🇷🇺Россия и СНГ, 🇺🇲США, 🇹🇭Таиланд, 🇹🇷Турция \nВыберите город', message.chat.id, keyboards.getCity(), state=User.CITY_IN),
+                quest)
 
 
         elif message.text.find('Мои заявки') != -1:
-            bot.register_next_step_handler(send_message('Заявки:', message.chat.id, keys(), 'adds', foto='MyAdds'),                                           res)
+            bot.register_next_step_handler(send_message('Заявки:', message.chat.id, keys(), 'adds', foto='MyAdds'),res)
             mode = [Add.EXPAND, Add.EDIT,Add.POSSIBLE]
             for add in active_user[message.chat.id].my_add():
                 add.print(mode, message.chat.id)
@@ -790,14 +793,15 @@ try:
         step =active_user[message.chat.id].step
         if message.text in ('На главную', '/start'):
             welcome(message)
+            return
 
         match state:
             case User.EDIT | User.MODER:
                 if active_user[message.chat.id].add['id']:
                     match step:
                         case User.CITY_IN | User.CITY_TO:
-                            if query:=search_city(message.text):
-                                active_user[message.chat.id].edit_add(query[0][0])
+                            if message.text in keyboards.cities:
+                                active_user[message.chat.id].edit_add(message.text)
                             else:
                                 msg = send_message('Не могу найти такого города попробуйте еще', message.chat.id,
                                                    keys())
@@ -840,8 +844,8 @@ try:
             case _:
                 match step:
                     case User.CITY_IN:
-                        if query:=search_city(message.text):
-                            message.text=query[0][0]
+                        if message.text in keyboards.cities:
+
                             log(message.chat.id, 'выбор города отправки ' + message.text, '', 'city1')
                             if state == User.TRANSFER :
                                 active_user[message.chat.id].add_data('city', message.text,True)
@@ -850,7 +854,7 @@ try:
                             elif state in (User.SEARCH_DELY_CITY_IN,User.SEARCH_SEND_CITY_IN):
                                 log(message.chat.id, 'поиск  {}'.format(message.text), '', 'search')
                                 active_user[message.chat.id].add_data('city_in', message.text)
-                                send_message(f"Выберите дату доставки" if state == User.SEARCH_DELY_CITY_IN else 'Выберите дату отправки', message.chat.id, state=User.DATE_TO)
+                                send_message(f"Выберите интервал времени (макс. 7 дней)"  , message.chat.id, state=User.DATE_IN) if state == User.SEARCH_DELY_CITY_IN else send_message(f"Выберите дату отправки"  , message.chat.id, state=User.DATE_TO)
                                 calendar(1, message)
                             elif state in (User.SEARCH_SEND_ALL,User.SEARCH_DELY_ALL):
                                 log(message.chat.id, 'поиск  {}'.format(message.text), '', 'search')
@@ -864,17 +868,18 @@ try:
                                 active_user[message.chat.id].add_data('city_in', message.text)
 
                                 bot.register_next_step_handler(
-                                    send_message('Укажите пункт назначения или код аэропорта', message.chat.id,
-                                                 keys(), User.CITY_TO, foto='carCity2'),
+                                    send_message('Выберите из списка пункт назначения', message.chat.id,
+                                                 keyboards.getCity(mask=message.text), User.CITY_TO, foto='carCity2'),
                                     quest)
                         else:
                             msg=send_message('Не могу найти такого города попробуйте еще',message.chat.id,keys())
                             bot.register_next_step_handler(msg,quest)
                             bot.delete_message(message.chat.id,msg.id,3)
+                            return
                     case User.CITY_TO:
 
-                        if query:=search_city(message.text):
-                            message.text=query[0][0]
+                        if message.text in keyboards.cities:
+
                             log(message.chat.id, 'выбор города доставки ' + message.text, '', 'city2')
 
                             active_user[message.chat.id].add_data('city_to', message.text)
@@ -882,12 +887,13 @@ try:
                                 send_message(f"Выберите интервал времени (макс. 7 дней)", message.chat.id, state=User.DATE_IN)
                                 calendar(1, message)
                             else:
-                                send_message(f"Выберите дату доставки", message.chat.id, state=User.DATE_TO)
+                                send_message(f"Выберите интервал времени (макс. 7 дней)", message.chat.id, state=User.DATE_IN) if state in (User.SEARCH_DELY_CITY_IN,User.SEARCH_DELY_ALL) else send_message(f"Укажите дату", message.chat.id, state=User.DATE_TO)
                                 calendar(1, message)
                         else:
                             msg = send_message('Не могу найти такого города попробуйте еще', message.chat.id, keys())
                             bot.register_next_step_handler(msg, quest)
                             bot.delete_message(message.chat.id, msg.id, 3)
+                            return
                     case User.TRANSFER:
 
                         if message.text =='Да':
@@ -956,6 +962,7 @@ try:
 
 
     def res(message):
+        bot.delete_message(message.chat.id,message.id)
         if message.text in ('На главную', '/start'):
             welcome(message)
         if message.text =='Мои заявки':
@@ -1007,7 +1014,7 @@ try:
                                                                              message.chat.id].state == User.ADD_SEND else User.SEARCH_DELY_ALL
             bot.register_next_step_handler(
                 send_message('Выберите город', message.chat.id, keyboards.getCity(), state=User.CITY_IN),
-                quest())
+                quest)
         else:
             send_message('Используйте кнопки', message.chat.id, state='getDely')
 
@@ -1218,7 +1225,7 @@ try:
         if message.text == 'Город оправки':
 
             bot.register_next_step_handler(
-                send_message('Укажите название города отправки или код аэропорта', message.chat.id, keys(), User.CITY_IN), quest)
+                send_message('Выберите из списка пункт отправления', message.chat.id, keyboards.getCity(), User.CITY_IN), quest)
 
         elif message.text == 'Ресурс':
             bot.register_next_step_handler(
@@ -1227,7 +1234,7 @@ try:
         elif message.text == 'Город прибытия':
 
             bot.register_next_step_handler(
-                send_message('Укажите название города отправки или код аэропорта', message.chat.id, keys(), User.CITY_TO), quest)
+                send_message('Укажите город прибытия', message.chat.id, keyboards.getCity(), User.CITY_TO), quest)
         elif message.text == 'Дату':
 
             send_message(
@@ -1326,14 +1333,14 @@ try:
                     if ex_add:
                         bot.register_next_step_handler(send_message('Найденные заявки',c.message.chat.id,keyboard,User.SEARCH),res)
                         for add in ex_add:
-                            add.print([Add.COLLAPSE],c.message)
+                            add.print([Add.COLLAPSE],c.message.chat.id)
                     else:
 
                         bot.register_next_step_handler(
                             send_message('Поиск не дал результатов, возможно будут интересны дополнительные заявки', c.message.chat.id, keyboard, User.SEARCH), res)
                         if alter_add:
                             for add in alter_add:
-                                add.print([Add.COLLAPSE],c.message)
+                                add.print([Add.COLLAPSE],c.message.chat.id)
 
 
 

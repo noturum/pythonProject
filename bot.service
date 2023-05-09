@@ -1,0 +1,16 @@
+[Unit]
+Description=bot
+
+[Service]
+Type=simple
+RemainAfterExit=yes
+
+ExecStart=python3 /root/bot/bot.py
+Restart=always
+RestartSec=10
+
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
