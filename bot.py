@@ -21,6 +21,7 @@ import settings
 from settings import bot
 from keyboards import keys
 
+
 class Job(threading.Thread):
     def __init__(self,fn,arg=None,timeout=None):
         super().__init__()
@@ -588,12 +589,12 @@ def send_message(text, uid, keyboard=None, state=None, foto=None, reply=False, v
         else:
             if video is not None:
 
-                active_user[uid].msg.append(bot.send_video(uid, open(f'/root/bot/img/{video}.mp4', 'rb')).id)
-                #active_user[uid].msg.append(bot.send_video(uid, open(f'img/{video}.mp4', 'rb')).id)
+                #active_user[uid].msg.append(bot.send_video(uid, open(f'/root/bot/img/{video}.mp4', 'rb')).id)
+                active_user[uid].msg.append(bot.send_video(uid, open(f'img/{video}.mp4', 'rb')).id)
             if foto is not None:
 
-                active_user[uid].msg.append(bot.send_photo(uid, open('/root/bot/img/'+foto+'.png', 'rb')).id)
-                #active_user[uid].msg.append(bot.send_photo(uid, open('img/' + foto + '.png', 'rb')).id)
+                #active_user[uid].msg.append(bot.send_photo(uid, open('/root/bot/img/'+foto+'.png', 'rb')).id)
+                active_user[uid].msg.append(bot.send_photo(uid, open('img/' + foto + '.png', 'rb')).id)
             if keyboard != None:
 
                 lastMsg = bot.send_message(chat_id=uid, text=text, reply_markup=keyboard)
@@ -684,8 +685,12 @@ try:
         elif message.text.find('Могу доставить') != -1:
             active_user[message.chat.id].state = User.ADD_DELY
             active_user[message.chat.id].add_data('type', User.ADD_DELY)
+            keyboard = types.ReplyKeyboardMarkup(True, True)
+            keyboard.add('Нет пересадок', 'Одна пересадка')
+            keyboard.add('Две пересадки', 'На главную')
+            
             bot.register_next_step_handler(
-                send_message('Выберите из списка пункт отправления', message.chat.id, keyboards.getCity(), User.CITY_IN, foto='carCity1'), quest)
+                send_message('Укажите количество пересадок', message.chat.id, keyboards.getCity(), User.TRANSFER, foto='carCity1'), quest)
 
         elif message.text.find('Поиск') != -1:
             # keyboard = types.ReplyKeyboardMarkup(True, True)
@@ -838,6 +843,7 @@ try:
                     send_message(text, message.chat.id, keyboard, state=User.RES)
                 else:
                     active_user[message.chat.id].moder(message)
+
 
 
 
