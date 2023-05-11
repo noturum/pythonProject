@@ -12,9 +12,10 @@ def mainK(id,admin=False):
     main = telebot.types.ReplyKeyboardMarkup(True, True)
     #main.add('Хочу отправить', 'Могу доставить')
     main.add('Могу доставить')
-    main.add('Поиск','Памятка пользователя')
+    main.add('Поиск','Все заявки') if admin else main.add('Поиск','Памятка пользователя')
     text='Мои заявки' if not count else 'Мои заявки ({})'.format(count)
     main.add(text, f'Стоимость')
+
 
     return main
 

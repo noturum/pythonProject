@@ -9,8 +9,8 @@ import datetime
 from datetime import date
 
 config = configparser.ConfigParser()
-#config.read('/root/bot/settings.ini')
-config.read('settings.ini')
+config.read('/root/bot/settings.ini')
+#config.read('settings.ini')
 
 bot = telebot.TeleBot(config['telegram']['token'])
 def compare(dely,send):

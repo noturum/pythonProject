@@ -145,10 +145,10 @@ class User():
 
     def set_state(self, state):
         self.last_adds=[]
-        
-        if state not in (self.MODER,self.TRANSFER) :
-                self.add = {'id': None, 'uid': None, 'city_in': None, 'city_to': None, 'date_in': None, 'date_to': None,
-                            'desc': None, 'contact': None, 'type': None, 'refer': None}
+        if self.state!= User.TRANSFER:
+            if state not in (self.MODER,self.TRANSFER) :
+                    self.add = {'id': None, 'uid': None, 'city_in': None, 'city_to': None, 'date_in': None, 'date_to': None,
+                                'desc': None, 'contact': None, 'type': None, 'refer': None}
         self._state = state
     state = property(fset=set_state, fget=get_state)
 
@@ -170,7 +170,11 @@ class User():
     def save(self):
         if self.validate():
 
-            save= db.executeSql(f"insert into adds(uid,city_in,city_to,date_in,date_to,desc,contact,type,refer) values({self.id},'{self.add['city_in']}','{self.add['city_to']}','{self.add['date_in']}','{self.add['date_to']}','{self.add['desc']}','{self.add['contact']}','{self.add['type']}','{self.add['refer']}') returning 'id','type'",True)[0]
+            save = db.executeSql(
+                f'insert into adds(uid,city_in,city_to,date_in,date_to,desc,contact,type,refer) '
+                f'values({self.id},"{self.add["city_in"]}","{self.add["city_to"]}","{self.add["date_in"]}","{self.add["date_to"]}","{self.add["desc"]}","{self.add["contact"]}","{self.add["type"]}","{self.add["refer"]}")'
+                f' returning id,type',
+                True)[0]
             for transfer in self.transfer:
                 db.executeSql(f'insert into transfer("add",city,date) values ({save[0]},"{transfer["city"]}","{transfer["date"]}")')
         return save if save else None
@@ -592,12 +596,12 @@ def send_message(text, uid, keyboard=None, state=None, foto=None, reply=False, v
         else:
             if video is not None:
 
-                #active_user[uid].msg.append(bot.send_video(uid, open(f'/root/bot/img/{video}.mp4', 'rb')).id)
-                active_user[uid].msg.append(bot.send_video(uid, open(f'img/{video}.mp4', 'rb')).id)
+                active_user[uid].msg.append(bot.send_video(uid, open(f'/root/bot/img/{video}.mp4', 'rb')).id)
+                #active_user[uid].msg.append(bot.send_video(uid, open(f'img/{video}.mp4', 'rb')).id)
             if foto is not None:
 
-                #active_user[uid].msg.append(bot.send_photo(uid, open('/root/bot/img/'+foto+'.png', 'rb')).id)
-                active_user[uid].msg.append(bot.send_photo(uid, open('img/' + foto + '.png', 'rb')).id)
+                active_user[uid].msg.append(bot.send_photo(uid, open('/root/bot/img/'+foto+'.png', 'rb')).id)
+                #active_user[uid].msg.append(bot.send_photo(uid, open('img/' + foto + '.png', 'rb')).id)
             if keyboard != None:
 
                 lastMsg = bot.send_message(chat_id=uid, text=text, reply_markup=keyboard)
@@ -686,12 +690,13 @@ try:
             bot.register_next_step_handler(
                 send_message('Выберите из списка пункт отправления', message.chat.id, keyboards.getCity(), User.CITY_IN, foto='carCity1'), quest)
         elif message.text.find('Могу доставить') != -1:
-            active_user[message.chat.id].state = User.TRANSFER
+
 
             keyboard = types.ReplyKeyboardMarkup(True, True)
             keyboard.add('Нет пересадок', 'Одна пересадка')
             keyboard.add('Две пересадки', 'На главную')
-            
+            active_user[message.chat.id].state = User.ADD_DELY
+            active_user[message.chat.id].add_data('type', User.ADD_DELY)
             bot.register_next_step_handler(
                 send_message('Укажите количество пересадок', message.chat.id, keyboard, User.TRANSFER, foto='carCity1'), quest)
 
@@ -846,20 +851,9 @@ try:
                     send_message(text, message.chat.id, keyboard, state=User.RES)
                 else:
                     active_user[message.chat.id].moder(message)
-            case User.TRANSFER:
 
-                if message.text =='Нет пересадок':
-                    active_user[message.chat.id].count_t=0
-                if message.text =='Одна пересадка':
-                    active_user[message.chat.id].count_t=1
-                if message.text =='Две пересадки':
-                    active_user[message.chat.id].count_t=2
-                active_user[message.chat.id].state = User.ADD_DELY
-                active_user[message.chat.id].add_data('type', User.ADD_DELY)
 
-                bot.register_next_step_handler(
-                    send_message('Выберите из списка пункт отправления', message.chat.id, keyboards.getCity(),
-                                 User.CITY_IN, foto='carCity1'), quest)
+
             case _:
                 match step:
                     case User.CITY_IN:
@@ -914,7 +908,17 @@ try:
                             bot.delete_message(message.chat.id, msg.id, 3)
                             return
                     case User.TRANSFER:
-                        pass
+                        if message.text == 'Нет пересадок':
+                            active_user[message.chat.id].count_t = 0
+                        if message.text == 'Одна пересадка':
+                            active_user[message.chat.id].count_t = 1
+                        if message.text == 'Две пересадки':
+                            active_user[message.chat.id].count_t = 2
+
+
+                        bot.register_next_step_handler(
+                            send_message('Выберите из списка пункт отправления', message.chat.id, keyboards.getCity(),
+                                         User.CITY_IN, foto='carCity1'), quest)
 
 
 
@@ -924,8 +928,7 @@ try:
 
                         log(message.chat.id, 'ввел описание', message.text, 'title')
                         active_user[message.chat.id].add_data('desc', message.text)
-                        if state == User.ADD_DELY:
-                            active_user[message.chat.id].state=User.TRANSFER
+
 
 
                         bot.register_next_step_handler(
@@ -1312,12 +1315,14 @@ try:
 
 
                 keyboard = types.ReplyKeyboardMarkup(True, True)
-                if active_user[c.message.chat.id].state == User.ADD_DELY:
-                    active_user[c.message.chat.id].state = User.TRANSFER
+                if active_user[c.message.chat.id].state in (User.ADD_DELY,User.TRANSFER):
+                    if active_user[c.message.chat.id].state ==User.ADD_DELY:
+                        active_user[c.message.chat.id].add_data('date_to', result)
+                        active_user[c.message.chat.id].state = User.TRANSFER
                     if len(active_user[c.message.chat.id].transfer) < active_user[c.message.chat.id].count_t:
 
                         bot.register_next_step_handler(
-                            send_message(f'Укажите город {active_user[c.message.chat.id].select_transfer} пересадки', c.message.chat.id, keyboards.getCity(),
+                            send_message(f'Укажите город {active_user[c.message.chat.id].select_transfer+1} пересадки', c.message.chat.id, keyboards.getCity(),
                                          User.CITY_IN, foto='carCity1'), quest)
                         return
 
@@ -1341,7 +1346,7 @@ try:
                                      foto='carAddsInfo'),
                         quest)
 
-                active_user[c.message.chat.id].add_data('date_to', result)
+
                 if active_user[c.message.chat.id].state in (User.SEARCH_SEND_CITY_IN , User.SEARCH_DELY_CITY_IN , User.SEARCH_DELY_ALL , User.SEARCH_SEND_ALL):
                     keyboard = types.ReplyKeyboardMarkup(True, True)
 
