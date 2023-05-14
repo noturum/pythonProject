@@ -596,12 +596,12 @@ def send_message(text, uid, keyboard=None, state=None, foto=None, reply=False, v
         else:
             if video is not None:
 
-                active_user[uid].msg.append(bot.send_video(uid, open(f'/root/bot/img/{video}.mp4', 'rb')).id)
-                #active_user[uid].msg.append(bot.send_video(uid, open(f'img/{video}.mp4', 'rb')).id)
+                #active_user[uid].msg.append(bot.send_video(uid, open(f'/root/bot/img/{video}.mp4', 'rb')).id)
+                active_user[uid].msg.append(bot.send_video(uid, open(f'img/{video}.mp4', 'rb')).id)
             if foto is not None:
 
-                active_user[uid].msg.append(bot.send_photo(uid, open('/root/bot/img/'+foto+'.png', 'rb')).id)
-                #active_user[uid].msg.append(bot.send_photo(uid, open('img/' + foto + '.png', 'rb')).id)
+                #active_user[uid].msg.append(bot.send_photo(uid, open('/root/bot/img/'+foto+'.png', 'rb')).id)
+                active_user[uid].msg.append(bot.send_photo(uid, open('img/' + foto + '.png', 'rb')).id)
             if keyboard != None:
 
                 lastMsg = bot.send_message(chat_id=uid, text=text, reply_markup=keyboard)
@@ -726,15 +726,17 @@ try:
 
 
         elif message.text == 'Все заявки' and checkAdm(message.chat.id):
-            back(message, 'welcome')
-            notify([message.chat.id], '', 'adds', True)
+            bot.register_next_step_handler(send_message('Заявки:', message.chat.id, keys(), 'adds', foto='MyAdds'), res)
+            mode = [Add.EXPAND, Add.EDIT, Add.POSSIBLE]
+            adds=[Add(i[0]) for i in db.executeSql(f'select id from adds')]
+            for add in active_user[message.chat.id].my_add():
+                add.print(mode, message.chat.id)
+
+
+
             addsKeyboard = telebot.types.ReplyKeyboardMarkup(True, True)
-            addsKeyboard.add('Поиск заявки', 'На главную')
-            bot.register_next_step_handler(send_message('Заявки:', message, addsKeyboard, state='adds', foto='MyAdds'),
-                                           searchAdds)
-            adds = filterAdds(message, True)
-            if adds != None:
-                printAdds(message, adds, None, True, False, True)
+            addsKeyboard.add( 'На главную')
+
 
         elif message.text.find('Памятка пользователя') != -1:
             help_text = '''Этот бот создан для экономии времени и комфортной помощи друг другу. Поэтому: 
@@ -1301,6 +1303,8 @@ try:
                     cal(c)
                 else:
                     active_user[c.message.chat.id].add_data('date_in', result)
+                    #bot.edit_message_text(f'{c.message.text}\n C {month(result)} -',c.message.chat.id,c.message.id)
+                    bot.answer_callback_query(c.id,f'C {month(result)}')
                     # bot.edit_message_text(f'Интервал больше 7 дней.{active_user[c.message.chat.id].add["date_in"]}-',c.message.chat.id,c.message.id)
                     active_user[c.message.chat.id].step = User.DATE_TO
 

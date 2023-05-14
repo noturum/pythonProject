@@ -58,7 +58,7 @@ def getCity(mask=None):
     cityArr=[]
     citiesK = telebot.types.ReplyKeyboardMarkup(True, True)
     citiesK.add('На главную')
-    cities= dbConn.executeSql('select name from cities') if mask is None else dbConn.executeSql('select name from cities where name !="{}"'.format(mask))
+    cities= dbConn.executeSql('select name from cities order by name ASC') if mask is None else dbConn.executeSql('select name from cities where name !="{}" order by name ASC'.format(mask))
     for city in cities:
         cityArr.append(city[0])
         if len(cityArr)==2:
